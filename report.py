@@ -192,8 +192,6 @@ def _draw_band(ax, band: str, mode: str, grouped: dict, limit: Limit) -> None:
 
 def write_charts(out_dir: Path, verdicts: list[Verdict], grouped: dict) -> list[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for stale in out_dir.glob("*.png"):
-        stale.unlink()
     bands = []
     for verdict in verdicts:
         if verdict.band not in bands:
