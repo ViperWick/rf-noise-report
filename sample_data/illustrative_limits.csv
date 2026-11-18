@@ -1,0 +1,5 @@
+band,max_avg_noise_dbm,max_p90_noise_dbm,max_delta_db,note
+B3,-94.50,-94.00,2.00,illustrative limit not a real OEM spec
+B7,-94.00,-93.50,2.00,illustrative limit not a real OEM spec
+B12,-95.00,-94.50,2.00,illustrative limit not a real OEM spec
+n78,-93.20,-92.80,2.00,illustrative limit not a real OEM spec
