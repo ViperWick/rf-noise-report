@@ -15,11 +15,14 @@ The original production version fed an Excel macro template and cut reporting fr
 
 ![Synthetic RX noise, Baseline vs Loaded](docs/sample_rx_noise_overview.png)
 
-LTE B12 on the Loaded unit is shifted high on purpose so the summary shows a Fail. The other bands stay under the sample limits.
+LTE B12 on the Loaded unit is shifted high on purpose so the summary shows a Fail.
+The B7 Loaded aux series intentionally omits one channel and is also marked Fail
+because an incomplete Baseline/Loaded comparison cannot pass. The remaining
+series stay under the sample limits.
 
 ## Illustrative limits
 
-These ceilings are **illustrative limits, not a real OEM spec.** A result passes when the Loaded average, the Loaded P90, and the Loaded-minus-Baseline delta are all at or below the row for that band.
+These ceilings are **illustrative limits, not a real OEM spec.** A result passes when the Loaded average, the Loaded P90, and the Loaded-minus-Baseline delta are all at or below the row for that band, and the Baseline and Loaded series both have measurements at every aligned channel.
 
 | Band | Max average (dBm) | Max P90 (dBm) | Max delta (dB) |
 | --- | ---: | ---: | ---: |

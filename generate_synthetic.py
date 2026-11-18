@@ -4,7 +4,8 @@
 The logs imitate a per-band instrument dump: two rows per channel (RxId 0 main,
 RxId 1 aux) and 100 RX power samples. Labels are intentionally loose so the
 format bridge has Mode/Band cleanup to do. One Loaded aux point on B7 is left
-out so the bridge has to pad the shared channel axis.
+out so the bridge has to pad the shared channel axis and the report can show
+that incomplete series do not pass.
 
 Nothing here is a measured unit, a customer log, or a real limit.
 """
@@ -136,7 +137,7 @@ def row_center(plan: dict, config: str, rx_id: int, index: int) -> float:
 
 
 def should_skip(plan: dict, config: str, channel: int, rx_id: int) -> bool:
-    """Leave a single hole so axis padding is visible in the bridge output."""
+    """Leave a single hole so axis padding and incomplete-series scoring are visible."""
     middle = plan["channels"][len(plan["channels"]) // 2][0]
     return (
         plan["band"] == "B7"

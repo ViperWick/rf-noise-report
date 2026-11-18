@@ -72,6 +72,9 @@ class Verdict:
     reasons: list[str]
 
 
+SeriesPoint = tuple[int, float, float, str, str]
+
+
 def load_limits(path: Path) -> dict[str, Limit]:
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
@@ -90,8 +93,8 @@ def load_limits(path: Path) -> dict[str, Limit]:
     return limits
 
 
-def _means_by_series(rows: list[dict[str, str]]) -> dict[tuple[str, str, str], list[tuple[int, float, float]]]:
-    grouped: dict[tuple[str, str, str], list[tuple[int, float, float]]] = {}
+def _means_by_series(rows: list[dict[str, str]]) -> dict[tuple[str, str, str], list[SeriesPoint]]:
+    grouped: dict[tuple[str, str, str], list[SeriesPoint]] = {}
     for row in rows:
         samples = [row[column] for column in NORM_RX_COLUMNS]
         if row["RowKind"] == "pad" or any(sample == "" for sample in samples):
@@ -102,18 +105,63 @@ def _means_by_series(rows: list[dict[str, str]]) -> dict[tuple[str, str, str], l
             mean = sum(float(sample) for sample in samples) / len(samples)
         key = (row["Band"], row["Config"], row["Antenna"])
         grouped.setdefault(key, []).append(
-            (int(row["AxisIndex"]), float(row["Frequency"]), mean if mean is not None else math.nan)
+            (
+                int(row["AxisIndex"]),
+                float(row["Frequency"]),
+                mean if mean is not None else math.nan,
+                row["RowKind"],
+                row["Channel"],
+            )
         )
     for points in grouped.values():
         points.sort()
     return grouped
 
 
-def _stats(points: list[tuple[int, float, float]]) -> tuple[float, float]:
-    means = [mean for _index, _freq, mean in points if not math.isnan(mean)]
+def _stats(points: list[SeriesPoint]) -> tuple[float, float]:
+    means = [mean for _index, _freq, mean, _kind, _channel in points if not math.isnan(mean)]
     if not means:
         raise ValueError("A series has no measurements to score")
     return q2(sum(means) / len(means)), q2(percentile(means, 90))
+
+
+def _series_for(
+    grouped: dict[tuple[str, str, str], list[SeriesPoint]],
+    band: str,
+    config: str,
+    antenna: str,
+) -> list[SeriesPoint]:
+    try:
+        return grouped[(band, config, antenna)]
+    except KeyError as exc:
+        raise ValueError(f"Band {band} is missing {config} {antenna} measurements") from exc
+
+
+def _format_missing(points: list[SeriesPoint]) -> str:
+    return ", ".join(
+        f"{channel} ({frequency:.1f} MHz)"
+        for _index, frequency, mean, _kind, channel in points
+        if math.isnan(mean)
+    )
+
+
+def _incomplete_reasons(
+    antenna: str,
+    baseline_points: list[SeriesPoint],
+    loaded_points: list[SeriesPoint],
+) -> list[str]:
+    reasons: list[str] = []
+    baseline_missing = _format_missing(baseline_points)
+    if baseline_missing:
+        reasons.append(
+            f"{antenna} baseline is missing measurement(s) at channel(s) {baseline_missing}; incomplete series cannot pass"
+        )
+    loaded_missing = _format_missing(loaded_points)
+    if loaded_missing:
+        reasons.append(
+            f"{antenna} loaded is missing measurement(s) at channel(s) {loaded_missing}; incomplete series cannot pass"
+        )
+    return reasons
 
 
 def score(rows: list[dict[str, str]], limits: dict[str, Limit]) -> tuple[list[Verdict], dict]:
@@ -129,10 +177,12 @@ def score(rows: list[dict[str, str]], limits: dict[str, Limit]) -> tuple[list[Ve
             raise ValueError(f"No illustrative limit for band {band}")
         limit = limits[band]
         for antenna in ("main", "aux"):
-            baseline = _stats(grouped[(band, "Baseline", antenna)])
-            loaded = _stats(grouped[(band, "Loaded", antenna)])
+            baseline_points = _series_for(grouped, band, "Baseline", antenna)
+            loaded_points = _series_for(grouped, band, "Loaded", antenna)
+            baseline = _stats(baseline_points)
+            loaded = _stats(loaded_points)
             delta = q2(loaded[0] - baseline[0])
-            reasons = []
+            reasons = _incomplete_reasons(antenna, baseline_points, loaded_points)
             if loaded[0] > limit.max_avg:
                 reasons.append(
                     f"{antenna} average {loaded[0]:.2f} dBm is above the illustrative limit {limit.max_avg:.2f} dBm"
@@ -166,8 +216,8 @@ def score(rows: list[dict[str, str]], limits: dict[str, Limit]) -> tuple[list[Ve
 def _draw_band(ax, band: str, mode: str, grouped: dict, limit: Limit) -> None:
     for config, antenna, color, marker in SERIES:
         points = grouped[(band, config, antenna)]
-        freqs = [freq for _index, freq, _mean in points]
-        means = [mean for _index, _freq, mean in points]
+        freqs = [freq for _index, freq, _mean, _kind, _channel in points]
+        means = [mean for _index, _freq, mean, _kind, _channel in points]
         ax.plot(
             freqs,
             means,
